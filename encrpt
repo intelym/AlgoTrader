@@ -1,0 +1,139 @@
+<%@page buffer="0kb" autoFlush="true" language="java"%>
+
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />
+	<meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+	
+	<title>sharekhan.com, your guide to financial jungle</title>
+</head>
+
+<body>
+	<%
+	String countQuery = "SELECT count(1) FROM CUST_MASTER WHERE ACCOUNT_STATUS = 'OPEN' and CREATION_DATE >= to_date('2018-2-14', 'yyyy-mm-dd')";
+	String selectQuery = "SELECT CUSTOMER_ID FROM CUST_MASTER WHERE ACCOUNT_STATUS = 'OPEN' and CREATION_DATE >= to_date('2018-02-14', 'yyyy-mm-dd')";
+	int custIDCount = 0;
+	List<String> custIDList = null;
+	
+	Connection conORA = DBUtil.getConnection("MiscPoolDS");
+	Statement stmtORA = conORA.createStatement();
+	ResultSet countResult = stmtORA.executeQuery(countQuery);
+	
+	if(countResult.next()) {
+		custIDCount = countResult.getInt(1);
+	}
+	
+	countResult.close();
+	out.print("custIDCount: " + custIDCount + "<br />");
+	
+	if(custIDCount > 0) {
+		custIDList = new ArrayList<String>(custIDCount);
+		ResultSet custIDResult = stmtORA.executeQuery(selectQuery);
+		
+		while(custIDResult.next()) {
+			custIDList.add(custIDResult.getString(1));
+		}
+		
+		custIDResult.close();
+	}
+	
+	//out.print("custIDList: " + custIDList + "<br />");
+	stmtORA.close();
+	DBUtil.releaseConnection(conORA);
+	
+	if(custIDList != null) {
+		int listSize = custIDList.size();
+		String timeStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Calendar.getInstance().getTime());
+		String insertQuery = "INSERT INTO web_encdec_custid (encCustid, decCustid, crDate, uptDate, UPDATE_USER) VALUES (?, ?, ?, ?, ?)";
+		
+		Connection conSQL = getConnection("AppAnalytics", "historyreport.sskiback.internal.sharekhan.com", "7333", "skweb", "w60@itmy$01");
+		PreparedStatement pstmtSQL = conSQL.prepareStatement(insertQuery);
+		
+		for(int i = 0, j = 1; i < listSize; i++, j++) {
+			String custID = custIDList.get(i);
+			String encCustID = DatatypeConverter.printBase64Binary(custID.getBytes("UTF-8"));
+			
+			pstmtSQL.setString(1, encCustID);
+			pstmtSQL.setString(2, custID);
+			pstmtSQL.setString(3, timeStamp);
+			pstmtSQL.setString(4, timeStamp);
+			pstmtSQL.setString(5, "Imran");
+			
+			pstmtSQL.addBatch();
+			
+			if(j % 1000 == 0) {
+				int[] result = pstmtSQL.executeBatch();
+				out.print("inner result (" + (j / 1000) + "): " + Arrays.toString(result) + "<br />");
+			}
+		}
+		
+		int[] result = pstmtSQL.executeBatch();
+		out.print("Outer result: " + Arrays.toString(result) + "<br />");
+		pstmtSQL.close();
+		releaseConnection(conSQL);
+	}
+	%>
+</body>
+</html>
+
+<%!
+Connection getConnection(String dbName, String host, String portNo, String user, String pwd) throws IOException {
+	Connection con = null;
+	
+	if(dbName == null || dbName.isEmpty()) {
+		throw new IOException("Database name not found");
+	} else if(host == null || host.isEmpty()) {
+		throw new IOException("Host name not found");
+	} else if(portNo == null || portNo.isEmpty()) {
+		throw new IOException("Port No not found");
+	} else if(user == null || user.isEmpty()) {
+		throw new IOException("User name not found");
+	} else if(pwd == null || pwd.isEmpty()) {
+		throw new IOException("password not found");
+	}
+	
+	String driverClass = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+	String connURL = "jdbc:sqlserver://" + host + ":" + portNo + ";databaseName=" + dbName + ";user=" + user + ";password=" + pwd;
+	
+	try {
+		Class.forName(driverClass);
+		con = DriverManager.getConnection(connURL);
+	} catch(ClassNotFoundException ex) {
+		throw new IOException(ex);
+	} catch(SQLException ex) {
+		throw new IOException(ex);
+	}
+	
+	return con;
+}
+
+void releaseConnection(Connection con) throws IOException {
+	if(con != null) {
+		try {
+			con.close();
+		} catch(SQLException ex) {
+			throw new IOException(ex);
+		}
+	}
+}
+%>
+
+<%@page import="java.io.IOException"%>
+<%@page import="java.lang.ClassNotFoundException"%>
+<%@page import="java.sql.Connection"%>
+<%@page import="java.sql.SQLException"%>
+<%@page import="java.sql.DriverManager"%>
+<%@page import="java.util.Calendar"%>
+<%@page import="java.text.SimpleDateFormat"%>
+<%@page import="java.sql.PreparedStatement"%>
+<%@page import="java.util.List"%>
+<%@page import="java.sql.ResultSet"%>
+<%@page import="java.sql.Statement"%>
+<%@page import="com.sski.common.utils.DBUtil"%>
+<%@page import="java.util.ArrayList"%>
+<%@page import="javax.xml.bind.DatatypeConverter"%>
+<%@page import="java.util.Arrays"%>
+
+<%@ page language="java" contentType="text/html; charset=ISO-8859-1" pageEncoding="ISO-8859-1"%>
+<%-- Created by imran.shaikh on Nov 16, 2017 --%>
